@@ -9,19 +9,19 @@
         <h1>🎤 Meeting Transcriber</h1>
         
         <div class="upload-box">
-            <input type="file" id="audioInput" accept=".wav,.mp3,.m4a">
+            <input type="file" id="audioInput" accept=".wav,.mp3">
             <button onclick="uploadAudio()">Upload & Transcribe</button>
-            <div id="uploadStatus" class="status-message"></div>
+            <div id="status"></div>
         </div>
         
         <div class="history">
             <h2>📁 Your Files</h2>
-            <div id="fileList" class="file-list">No files uploaded yet</div>
+            <div id="fileList">No files yet</div>
         </div>
         
         <div class="result">
             <h2>📝 Transcript</h2>
-            <div id="transcript" class="transcript-box">Select a file to view transcript</div>
+            <div id="transcript">Select a file</div>
         </div>
     </div>
 
@@ -30,15 +30,11 @@
         
         async function uploadAudio() {
             const fileInput = document.getElementById('audioInput');
-            const statusDiv = document.getElementById('uploadStatus');
-            const transcriptDiv = document.getElementById('transcript');
-            
+            const statusDiv = document.getElementById('status');
             statusDiv.textContent = "Uploading...";
-            statusDiv.style.color = "blue";
             
             if (!fileInput.files.length) {
-                statusDiv.textContent = "Please select an audio file first!";
-                statusDiv.style.color = "red";
+                statusDiv.textContent = "Please select a file!";
                 return;
             }
             
@@ -54,61 +50,44 @@
                 
                 const data = await response.json();
                 
-                if (data.status === "error") {
-                    throw new Error(data.message);
+                if (data.error) {
+                    throw new Error(data.error);
                 }
                 
                 files.push(data);
-                renderFileList();
+                renderFiles();
                 showTranscript(data.id);
-                
-                statusDiv.textContent = "✓ Upload and transcription successful!";
-                statusDiv.style.color = "green";
+                statusDiv.textContent = "Done!";
                 
             } catch (error) {
-                console.error("Error:", error);
                 statusDiv.textContent = `Error: ${error.message}`;
-                statusDiv.style.color = "red";
-                transcriptDiv.textContent = `Error: ${error.message}`;
-                transcriptDiv.style.color = "red";
+                console.error(error);
             }
         }
         
-        async function showTranscript(fileId) {
+        async function showTranscript(id) {
             const transcriptDiv = document.getElementById('transcript');
-            transcriptDiv.textContent = "Loading transcript...";
-            transcriptDiv.style.color = "blue";
+            transcriptDiv.textContent = "Loading...";
             
             try {
-                const response = await fetch(`/get_transcript/${fileId}`);
+                const response = await fetch(`/get_transcript/${id}`);
                 const data = await response.json();
                 
-                if (data.status === "error") {
-                    throw new Error(data.message);
+                if (data.error) {
+                    throw new Error(data.error);
                 }
                 
                 transcriptDiv.textContent = data.text;
-                transcriptDiv.style.color = "black";
-                
             } catch (error) {
-                console.error("Error loading transcript:", error);
                 transcriptDiv.textContent = `Error: ${error.message}`;
-                transcriptDiv.style.color = "red";
             }
         }
         
-        function renderFileList() {
+        function renderFiles() {
             const fileList = document.getElementById('fileList');
-            
-            if (files.length === 0) {
-                fileList.innerHTML = "No files uploaded yet";
-                return;
-            }
-            
             fileList.innerHTML = files.map(file => `
                 <div class="file-item" onclick="showTranscript('${file.id}')">
-                    <strong>${file.filename}</strong>
-                    <div class="file-time">${file.timestamp}</div>
+                    ${file.filename} (${file.timestamp})
                 </div>
             `).join('');
         }
