@@ -3,25 +3,21 @@ import whisper
 import os
 from datetime import datetime
 import uuid
-import logging
+from pathlib import Path
 
 app = Flask(__name__, static_folder='static')
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Configure paths
+BASE_DIR = Path(__file__).parent
+UPLOAD_FOLDER = BASE_DIR / "uploads"
+TRANSCRIPT_FOLDER = BASE_DIR / "transcripts"
 
-# Initialize model
-try:
-    model = whisper.load_model("base")
-    logger.info("Whisper model loaded successfully")
-except Exception as e:
-    logger.error(f"Failed to load model: {str(e)}")
-    model = None
+# Create folders
+UPLOAD_FOLDER.mkdir(exist_ok=True)
+TRANSCRIPT_FOLDER.mkdir(exist_ok=True)
 
-# Ensure directories exist
-os.makedirs('uploads', exist_ok=True)
-os.makedirs('transcripts', exist_ok=True)
+# Load model
+model = whisper.load_model("base")
 
 @app.route('/')
 def home():
@@ -29,82 +25,49 @@ def home():
 
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
-    if not model:
-        return jsonify({"status": "error", "message": "Model not loaded"}), 500
-        
     if 'audio' not in request.files:
-        return jsonify({"status": "error", "message": "No file uploaded"}), 400
+        return jsonify({"error": "No file"}), 400
     
     file = request.files['audio']
     if file.filename == '':
-        return jsonify({"status": "error", "message": "No file selected"}), 400
+        return jsonify({"error": "Empty filename"}), 400
 
     try:
-        # Create safe filename
+        # Generate unique filename
         file_id = str(uuid.uuid4())
         file_ext = os.path.splitext(file.filename)[1]
-        audio_filename = f"{file_id}{file_ext}"
-        audio_path = os.path.join('uploads', audio_filename)
+        audio_path = UPLOAD_FOLDER / f"{file_id}{file_ext}"
         
         # Save file
-        file.save(audio_path)
-        logger.info(f"File saved to: {audio_path}")
+        file.save(str(audio_path))
         
-        # Verify file exists
-        if not os.path.exists(audio_path):
-            logger.error("File save verification failed")
-            return jsonify({"status": "error", "message": "File save failed"}), 500
-
-        # Transcribe with detailed logging
-        logger.info("Starting transcription...")
-        result = model.transcribe(audio_path, language='en')
-        logger.info("Transcription completed")
-        
+        # Transcribe
+        result = model.transcribe(str(audio_path), language='en')
         clean_text = " ".join(result["text"].split())
-        logger.info(f"Transcript length: {len(clean_text)} characters")
         
         # Save transcript
-        transcript_filename = f"{file_id}.txt"
-        transcript_path = os.path.join('transcripts', transcript_filename)
-        
+        transcript_path = TRANSCRIPT_FOLDER / f"{file_id}.txt"
         with open(transcript_path, 'w', encoding='utf-8') as f:
             f.write(clean_text)
-        logger.info(f"Transcript saved to: {transcript_path}")
         
         return jsonify({
-            "status": "success",
             "id": file_id,
-            "filename": file.filename,
             "text": clean_text,
+            "filename": file.filename,
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         })
         
     except Exception as e:
-        logger.error(f"Error in transcription: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/get_transcript/<file_id>')
 def get_transcript(file_id):
     try:
-        transcript_path = os.path.join('transcripts', f"{file_id}.txt")
-        logger.info(f"Attempting to load: {transcript_path}")
-        
-        if not os.path.exists(transcript_path):
-            logger.error("Transcript file not found")
-            return jsonify({"status": "error", "message": "Transcript not found"}), 404
-            
+        transcript_path = TRANSCRIPT_FOLDER / f"{file_id}.txt"
         with open(transcript_path, 'r', encoding='utf-8') as f:
-            content = f.read()
-            logger.info(f"Successfully loaded transcript: {len(content)} characters")
-            return jsonify({
-                "status": "success", 
-                "text": content,
-                "filename": f"{file_id}.txt"
-            })
-            
-    except Exception as e:
-        logger.error(f"Error loading transcript: {str(e)}")
-        return jsonify({"status": "error", "message": str(e)}), 500
+            return jsonify({"text": f.read()})
+    except:
+        return jsonify({"error": "Not found"}), 404
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
