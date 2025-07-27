@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Meeting Transcriber</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Browser Audio Transcriber</h1>
+        <input type="file" id="audioInput" accept="audio/*">
+        <button id="transcribeBtn">Transcribe</button>
+        <div id="status">Select an audio file</div>
+        <div id="result"></div>
+    </div>
+
+    <script>
+        document.getElementById('transcribeBtn').addEventListener('click', async () => {
+            const fileInput = document.getElementById('audioInput');
+            const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
+            
+            if (!fileInput.files.length) {
+                statusDiv.textContent = "Please select an audio file first!";
+                return;
+            }
+
+            statusDiv.textContent = "Loading Whisper.js...";
+            
+            // Dynamic import of Whisper
+            const { pipeline } = await import('https://cdn.jsdelivr.net/npm/@xenova/transformers@2.4.0');
+            const transcriber = await pipeline('automatic-speech-recognition', 'Xenova/whisper-tiny');
+            
+            statusDiv.textContent = "Transcribing...";
+            const audioFile = fileInput.files[0];
+            const audioContext = new AudioContext();
+            const buffer = await audioFile.arrayBuffer();
+            const decoded = await audioContext.decodeAudioData(buffer);
+            
+            const { text } = await transcriber({
+                raw: {
+                    data: Array.from(decoded.getChannelData(0)),
+                    sample_rate: audioContext.sampleRate
+                }
+            });
+            
+            resultDiv.textContent = text;
+            statusDiv.textContent = "Done!";
+        });
+    </script>
+</body>
+</html>
